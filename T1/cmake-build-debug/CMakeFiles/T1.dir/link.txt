@@ -1,0 +1,1 @@
+/usr/bin/c++    -Wall -O3 -fopenmp -g   CMakeFiles/T1.dir/main.cpp.o  -o T1 
