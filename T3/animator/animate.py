@@ -1,17 +1,19 @@
 import numpy as np
 from mpl_backend_workaround import MPL_BACKEND_USED
 import matplotlib.pyplot as plt
-from matplotlib.animation import ArtistAnimation, FuncAnimation
+from matplotlib.animation import FuncAnimation, writers as a_writers
 import numpy.random
 import sys
 
 
 def setup_axes(points, title):
     fig, ax = plt.subplots()
-
     fig.canvas.set_window_title(title)
+    fig.set_size_inches(13, 6.8, forward=True)
+    fig.tight_layout(pad=0.)
+
     manager = plt.get_current_fig_manager()
-    manager.window.wm_geometry("+100+100")
+    manager.window.wm_geometry("+20+20")
 
     ax.set_aspect('equal')
 
@@ -36,6 +38,7 @@ def setup_axes(points, title):
     ax.xaxis.tick_bottom()
 
     ax.grid(True, which='both')
+    # ax.set_frame_on(False)
 
     return fig, ax
 
@@ -75,34 +78,45 @@ class ParticlesReader:
             self.tm = tm
 
 
+def iter_func(iter_num, _a, _p):
+    # print(iter_num)
+    for i in range(len(_a)):
+        _a[i].center = _p[iter_num, i, :]
+
+    return _a
+
+
 def main():
     print('Using MPL backend: {}'.format(MPL_BACKEND_USED))
 
     pt_r = 0.05
-    animation_delay = 300
+    animation_delay = 50.
     path = sys.argv[1]
 
     r = ParticlesReader(path)
     r.read()
+    print("Time: {} \nN: {} \nIterations count: {} \nh: {}".format(r.tm, r.n, r.n_iter, r.h))
+
     col = [tuple(numpy.random.uniform(0, 1, 3)) for _ in range(r.n)]
 
     # Create artists now
     fig, ax = setup_axes(r.p, "Particles")
 
-    artists = [[plt.Circle(r.p[it, i, :], pt_r, color=col[i])
-                for i in range(r.n)]
-               for it in range(r.n_iter)]
+    artists = [plt.Circle(r.p[0, i, :], pt_r, color=col[i])
+               for i in range(r.n)]
 
-    for l in artists:
-        for a in l:
-            ax.add_artist(a)
+    for a in artists:
+        ax.add_artist(a)
 
-    _ = ArtistAnimation(fig, artists,
-                        interval=animation_delay,
-                        repeat_delay=None,
-                        repeat=True)
+    animation = FuncAnimation(fig, iter_func, r.n_iter, interval=animation_delay,
+                      fargs=(artists, r.p),
+                      repeat=True, blit=True)
 
-    plt.show()
+    plt.rcParams['animation.ffmpeg_path'] = u'/usr/bin/ffmpeg'
+    writer = a_writers['ffmpeg'](fps=15, metadata=dict(artist='Me'), bitrate=1800)
+    animation.save('ani.mp4', writer=writer)
+
+    # plt.show()
 
 
 if __name__ == "__main__":

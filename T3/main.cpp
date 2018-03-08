@@ -24,6 +24,7 @@ public:
 		auto res = tm_ - tm;
 		tm = tm_;
 		return res;
+
 	}
 };
 
@@ -108,8 +109,9 @@ void rk(int n, int k, int sz,
 	delete[] temp;
 }
 
-void gen(int n, double * p, double * w){
-	// Generate inside a circle
+void gen(int n, double * p, double * w, bool inside_square = true){
+	// Generate inside a circle or square
+
 	double r = 2;
 	double r2 = r * r;
 
@@ -120,15 +122,17 @@ void gen(int n, double * p, double * w){
 	long long seed = value.count();
 	std::mt19937_64 gen(seed);
 	std::uniform_real_distribution<double> dist(-r, r);
+	//std::normal_distribution<double> dist2(0., 1.);
+	std::uniform_real_distribution<double> dist2(-2.5, 2.5);
 
 	int i = 0;
 	while(i < n){
 		double x = dist(gen);
 		double y = dist(gen);
-		if(x * x + y * y < r2){
+		if(inside_square || x * x + y * y < r2 ){
 			p[i] = x;
 			p[i + n] = y;
-			w[i] = 1;
+			w[i] = dist2(gen);
 			++i;
 		}
 	}
@@ -178,7 +182,7 @@ void go(std::ostream & out, int rank, int size, int n, int n_iter, double h){
 	p = new double[2 * n];
 	w = new double[n];
 	if(rank == 0)
-		gen3(n, p, w);
+		gen(n, p, w);
 	MPI_Bcast(p, 2 * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Bcast(w, n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
@@ -186,7 +190,7 @@ void go(std::ostream & out, int rank, int size, int n, int n_iter, double h){
 	auto tm = tt.stop_reset();
 
 	if(rank == 0) {
-		out << (double) tm * 10e-6 << std::endl;
+		out << (double) tm * 1e-6 << std::endl;
 		out << n << " " << n_iter << " " << h << "\n";
 		for (int i = 0; i < n; ++i) {
 			out << w[i] << " ";
@@ -203,7 +207,7 @@ void go(std::ostream & out, int rank, int size, int n, int n_iter, double h){
 	}
 }
 
-int main() {
+int main(int argc, char ** argv) {
 	MPI_Init(NULL, NULL);
 	int size, rank;
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -217,8 +221,11 @@ int main() {
 #else
 	std::ostream & out = std::cout;
 #endif
-
-	go(out, rank, size, 50, 50, 0.01);
+	//std::cout << argc;
+	go(out, rank, size,
+	   std::stoi(argv[1]),
+	   std::stoi(argv[2]),
+	   std::stod(argv[3]));
 
 #ifdef ILEASILE
 	if(rank == 0)
