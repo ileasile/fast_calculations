@@ -4,16 +4,19 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, writers as a_writers
 import numpy.random
 import sys
+from config import CONFIG
 
 
 def setup_axes(points, title):
     fig, ax = plt.subplots()
     fig.canvas.set_window_title(title)
-    fig.set_size_inches(13, 6.8, forward=True)
+    fig.set_size_inches(CONFIG['window_width'],
+                        CONFIG['window_height'],
+                        forward=True)
     fig.tight_layout(pad=0.)
 
     manager = plt.get_current_fig_manager()
-    manager.window.wm_geometry("+20+20")
+    manager.window.wm_geometry("+{}+{}".format(CONFIG['window_x'], CONFIG['window_y']))
 
     ax.set_aspect('equal')
 
@@ -79,7 +82,6 @@ class ParticlesReader:
 
 
 def iter_func(iter_num, _a, _p):
-    # print(iter_num)
     for i in range(len(_a)):
         _a[i].center = _p[iter_num, i, :]
 
@@ -89,8 +91,8 @@ def iter_func(iter_num, _a, _p):
 def main():
     print('Using MPL backend: {}'.format(MPL_BACKEND_USED))
 
-    pt_r = 0.05
-    animation_delay = 50.
+    pt_r = CONFIG['pt_r']
+    animation_delay = CONFIG['animation_delay']
     path = sys.argv[1]
 
     r = ParticlesReader(path)
@@ -100,7 +102,7 @@ def main():
     col = [tuple(numpy.random.uniform(0, 1, 3)) for _ in range(r.n)]
 
     # Create artists now
-    fig, ax = setup_axes(r.p, "Particles")
+    fig, ax = setup_axes(r.p, CONFIG['animation_title'])
 
     artists = [plt.Circle(r.p[0, i, :], pt_r, color=col[i])
                for i in range(r.n)]
@@ -109,14 +111,18 @@ def main():
         ax.add_artist(a)
 
     animation = FuncAnimation(fig, iter_func, r.n_iter, interval=animation_delay,
-                      fargs=(artists, r.p),
-                      repeat=True, blit=True)
+                              fargs=(artists, r.p),
+                              repeat=True, blit=True)
 
-    plt.rcParams['animation.ffmpeg_path'] = u'/usr/bin/ffmpeg'
-    writer = a_writers['ffmpeg'](fps=15, metadata=dict(artist='Me'), bitrate=1800)
-    animation.save('ani.mp4', writer=writer)
+    if CONFIG['save_video']:
+        plt.rcParams['animation.ffmpeg_path'] = CONFIG['ffmpeg_path']
+        writer = a_writers['ffmpeg'](fps=CONFIG['fps'],
+                                     metadata=dict(artist='Me'),
+                                     bitrate=CONFIG['bitrate'])
+        animation.save(CONFIG['video_path'], writer=writer)
 
-    # plt.show()
+    if CONFIG['show_animation']:
+        plt.show()
 
 
 if __name__ == "__main__":

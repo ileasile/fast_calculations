@@ -1,32 +1,13 @@
 #include <iostream>
 #include <fstream>
 #include <mpi.h>
-#include <sys/time.h>
 #include <utility>
 #include <algorithm>
 #include <cstring>
 #include <random>
 #include <chrono>
 #include <cmath>
-
-class Timer{
-	struct timeval tv;
-	unsigned long long tm;
-public:
-	Timer(){
-		gettimeofday(&tv, NULL);
-		tm = (unsigned long long)tv.tv_sec * 1000000 + tv.tv_usec;
-	}
-
-	unsigned long long stop_reset(){
-		gettimeofday(&tv, NULL);
-		auto tm_ = (unsigned long long)tv.tv_sec * 1000000 + tv.tv_usec;
-		auto res = tm_ - tm;
-		tm = tm_;
-		return res;
-
-	}
-};
+#include "Timer.h"
 
 const double pi = 3.1415926;
 const double c_1_2pi = 1./2./pi;
@@ -122,7 +103,7 @@ void gen(int n, double * p, double * w, bool inside_square = true){
 	long long seed = value.count();
 	std::mt19937_64 gen(seed);
 	std::uniform_real_distribution<double> dist(-r, r);
-	//std::normal_distribution<double> dist2(0., 1.);
+	// std::normal_distribution<double> dist2(0., 1.);
 	std::uniform_real_distribution<double> dist2(-2.5, 2.5);
 
 	int i = 0;
@@ -221,7 +202,7 @@ int main(int argc, char ** argv) {
 #else
 	std::ostream & out = std::cout;
 #endif
-	//std::cout << argc;
+
 	go(out, rank, size,
 	   std::stoi(argv[1]),
 	   std::stoi(argv[2]),
