@@ -1,4 +1,0 @@
-/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /media/sf_Common/8sem/T1
--- Configuring done
--- Generating done
--- Build files have been written to: /media/sf_Common/8sem/T1/cmake-build-debug
