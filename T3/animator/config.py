@@ -1,10 +1,10 @@
 CONFIG = {
     'ffmpeg_path': u'/usr/bin/ffmpeg',
     'out_path': '../out.txt',
-    'video_path': 'ani.mpg',
+    'video_path': 'ani_longer.mp4',
     'fps': 15,
     'bitrate': 1800,
-    'save_video': False,
+    'save_video': True,
     'show_animation': True,
     'animation_title': 'Particles',
 
