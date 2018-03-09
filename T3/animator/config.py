@@ -4,7 +4,7 @@ CONFIG = {
     'video_path': 'ani_longer.mp4',
     'fps': 15,
     'bitrate': 1800,
-    'save_video': True,
+    'save_video': False,
     'show_animation': True,
     'animation_title': 'Particles',
 

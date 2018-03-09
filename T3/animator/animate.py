@@ -3,7 +3,6 @@ from mpl_backend_workaround import MPL_BACKEND_USED
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, writers as a_writers
 import numpy.random
-import sys
 from config import CONFIG
 
 
@@ -93,7 +92,7 @@ def main():
 
     pt_r = CONFIG['pt_r']
     animation_delay = CONFIG['animation_delay']
-    path = sys.argv[1]
+    path = CONFIG['out_path']
 
     r = ParticlesReader(path)
     r.read()

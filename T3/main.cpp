@@ -157,13 +157,28 @@ void gen3(int n, double * p, double * w){
 	}
 }
 
+void gen4(int n, double * p, double * w){
+	// Generate on a circle
+	double r = 2;
+
+	for(int i = 0; i < n; ++i){
+		double phi = i * 2 * pi / n;
+		double rd = r * (1 - sin(phi));
+		double x = rd * cos(phi);
+		double y = rd * sin(phi);
+		p[i] = x;
+		p[i + n] = y;
+		w[i] = 1;
+	}
+}
+
 void go(std::ostream & out, int rank, int size, int n, int n_iter, double h){
 	Timer tt;
 	double *p, *w, *r;
 	p = new double[2 * n];
 	w = new double[n];
 	if(rank == 0)
-		gen(n, p, w);
+		gen4(n, p, w);
 	MPI_Bcast(p, 2 * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Bcast(w, n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
