@@ -103,22 +103,25 @@ def main():
     # Create artists now
     fig, ax = setup_axes(r.p, CONFIG['animation_title'])
 
-    artists = [plt.Circle(r.p[0, i, :], pt_r, color=col[i])
-               for i in range(r.n)]
 
-    for a in artists:
-        ax.add_artist(a)
+    artists = [[plt.Circle(r.p[j, i, :], pt_r, color=col[i])
+                for i in range(r.n)]
+               for j in range(800)]
 
-    animation = FuncAnimation(fig, iter_func, r.n_iter, interval=animation_delay,
-                              fargs=(artists, r.p),
-                              repeat=True, blit=True)
+    for l in artists:
+        for a in l:
+            ax.add_artist(a)
+
+    # animation = FuncAnimation(fig, iter_func, r.n_iter, interval=animation_delay,
+    #                           fargs=(artists, r.p),
+    #                           repeat=True, blit=True)
 
     if CONFIG['save_video']:
         plt.rcParams['animation.ffmpeg_path'] = CONFIG['ffmpeg_path']
         writer = a_writers['ffmpeg'](fps=CONFIG['fps'],
                                      metadata=dict(artist='Me'),
                                      bitrate=CONFIG['bitrate'])
-        animation.save(CONFIG['video_path'], writer=writer)
+        # animation.save(CONFIG['video_path'], writer=writer)
 
     if CONFIG['show_animation']:
         plt.show()
