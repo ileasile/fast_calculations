@@ -8,7 +8,7 @@ CONFIG = {
     'show_animation': True,
     'animation_title': 'Particles',
 
-    'pt_r': 0.35,
+    'pt_r': 0.85,
     'animation_delay': 2.,
 
     'window_width': 13.,
