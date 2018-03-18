@@ -24,23 +24,27 @@ void f(int n, int k, int sz, double * arg, double * res, double * omega){
 	int cluster_beg = std::min(n - 1, k * cluster_size);
 	int cluster_end = std::min(n, (k + 1) * cluster_size);
 
-	#pragma omp parallel for
-	for(int j = cluster_beg; j < cluster_end; ++j){
-		for(int i = 0; i < j; ++i){
-			double dx = x[i] - x[j];
-			double dy = y[i] - y[j];
-			double m = omega[j]/(dx*dx + dy*dy);
+	#pragma omp parallel
+	{
+		std::cout << omp_get_num_threads() << "\n";
+		#pragma omp for
+		for (int j = cluster_beg; j < cluster_end; ++j) {
+			for (int i = 0; i < j; ++i) {
+				double dx = x[i] - x[j];
+				double dy = y[i] - y[j];
+				double m = omega[j] / (dx * dx + dy * dy);
 
-			rx[i] += dy * m;
-			ry[i] += dx * m;
-		}
-		for(int i = j+1; i < n; ++i){
-			double dx = x[i] - x[j];
-			double dy = y[i] - y[j];
-			double m = omega[j]/(dx*dx + dy*dy);
+				rx[i] += dy * m;
+				ry[i] += dx * m;
+			}
+			for (int i = j + 1; i < n; ++i) {
+				double dx = x[i] - x[j];
+				double dy = y[i] - y[j];
+				double m = omega[j] / (dx * dx + dy * dy);
 
-			rx[i] += dy * m;
-			ry[i] += dx * m;
+				rx[i] += dy * m;
+				ry[i] += dx * m;
+			}
 		}
 	}
 
