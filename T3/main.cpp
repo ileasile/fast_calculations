@@ -10,8 +10,8 @@
 #include <omp.h>
 #include "Timer.h"
 
-const double pi = 3.1415926;
-const double c_1_2pi = 1./2./pi;
+const double pi = 3.14159265358979323846;
+const double c_1_2pi = .5/pi;
 const double c_m1_2pi = - c_1_2pi;
 
 void f(int n, int k, int sz, double * arg, double * res, double * omega){
@@ -24,7 +24,7 @@ void f(int n, int k, int sz, double * arg, double * res, double * omega){
 	int cluster_beg = std::min(n - 1, k * cluster_size);
 	int cluster_end = std::min(n, (k + 1) * cluster_size);
 
-	#pragma omp parallel for
+	//#pragma omp parallel for
 	for(int j = cluster_beg; j < cluster_end; ++j){
 		for(int i = 0; i < j; ++i){
 			double dx = x[i] - x[j];
@@ -44,7 +44,7 @@ void f(int n, int k, int sz, double * arg, double * res, double * omega){
 		}
 	}
 
-	#pragma omp parallel for
+	//#pragma omp parallel for
 	for(int i = 0; i < n; ++i){
 		rx[i] *= c_m1_2pi;
 		ry[i] *= c_1_2pi;
@@ -73,6 +73,7 @@ void rk(int n, int k, int sz,
 	memcpy(r, p, vsz);
 
 	for(int i = 1; i < n_iter; ++i){
+		// std::cout << i << "\n";
 		memset(k1, 0, vsz * 4);
 
 		double * r_cur = r + i * n2;
@@ -168,7 +169,7 @@ void gen3(int n, double * p, double * w){
 }
 
 void gen4(int n, double * p, double * w){
-	// Generate on a circle
+	// Generate on a cardioida
 	double r = 2;
 
 	for(int i = 0; i < n; ++i){
@@ -182,13 +183,28 @@ void gen4(int n, double * p, double * w){
 	}
 }
 
+void gen5(int n, double * p, double * w){
+	// Generate on a circle
+	int k = 10;
+	for(int r = 0; r < k; ++r) {
+		for (int i = 0; i < n / k; ++i) {
+			double phi = i * 2 * pi / n * k;
+			double x = (r + 1) * cos(phi);
+			double y = (r + 1) * sin(phi);
+			p[r * k + i] = x;
+			p[r * k + i + n] = y;
+			w[r * k + i] = 5;
+		}
+	}
+}
+
 void go(std::ostream & out, int rank, int size, int n, int n_iter, double h){
 	Timer tt;
 	double *p, *w, *r;
 	p = new double[2 * n];
 	w = new double[n];
 	if(rank == 0)
-		gen4(n, p, w);
+		gen5(n, p, w);
 	MPI_Bcast(p, 2 * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Bcast(w, n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 

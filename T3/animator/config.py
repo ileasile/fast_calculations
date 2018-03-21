@@ -1,7 +1,7 @@
 CONFIG = {
     'ffmpeg_path': u'/usr/bin/ffmpeg',
     'out_path': '../out.txt',
-    'video_path': 'ani_longer.mp4',
+    'video_path': 'ani_circle2.mp4',
     'fps': 15,
     'bitrate': 1800,
     'save_video': False,
