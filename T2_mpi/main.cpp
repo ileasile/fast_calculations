@@ -50,58 +50,52 @@ double vr(int n, double R){
 	}
 }
 
-double do_(int dim, int n, int k, double R, MPI_Comm & comm) {
-
+double do_(int dim, int n, int size, int k, double R, MPI_Comm & comm) {
 	Timer tm;
 
-	int n_per_p = n/k;
-	int overall = n_per_p * k;
+	int n_per_p = n/size;
+	int overall = n_per_p * size;
 	double r2 = R*R;
 	int hits = 0;
 
 	typedef std::chrono::high_resolution_clock  hrclock;
 	hrclock::time_point now = hrclock::now();
 	auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
-
 	auto value = now_ms.time_since_epoch();
 	long long seed = value.count();
 
 	int h = 0;
 
 	long long sd = seed + k * 10;
-	//std::mt19937 gen(sd);
-	//std::minstd_rand gen(sd);
 	std::mt19937_64 gen(sd);
 	double rnd =  (2. * R) / (1. + gen.max()) ;
 
 	for(int i=0; i < n_per_p; ++i){
 		double s = 0, p = 0;
 		for(int j=0; j < dim; ++j){
-			//p = rand()/rnd - R;
 			p = gen()*rnd - R;
 			s += p*p;
 		}
 		if(s < r2)
 			++h;
 	}
-	//std::cout << "\nproc " << nT;
-	//std::cout << nT << "\n";
 
-	MPI_Allreduce(&h, &hits, 1, MPI_DOUBLE, MPI_SUM, comm);
-
-	double v = cube_v(R, dim) * hits/overall;
+	MPI_Allreduce(&h, &hits, 1, MPI_INT, MPI_SUM, comm);
 
 	double t_val = tm.stop_reset() * 1e-6;
 
-	double v_real = vr(dim, R);
+	if(k == 0){
+		double v = cube_v(R, dim) * hits/overall;
+		double v_real = vr(dim, R);
 
-	std::cout
-			<< "Threads number: " << k
-			<< ", calculated volume:" << v
-			<< ", real volume:" << v_real
-			<< ", n = " << n
-			<< ", dim = " << dim
-			<< ", time(sec) = " << t_val << "\n";
+		std::cout
+				<< "Threads number: " << size
+				<< ", calculated volume:" << v
+				<< ", real volume:" << v_real
+				<< ", n = " << n
+				<< ", dim = " << dim
+				<< ", time(sec) = " << t_val << "\n";
+	}
 
 	return t_val;
 }
@@ -127,26 +121,38 @@ int main(int argn, char ** argv) {
 		processors.push_back(atoi(argv[i]));
 	}
 
-	std::ofstream csv("out_d_"+std::to_string(dim)+".csv");
+	std::ofstream csv;
 	std::string delim = ",";
 
-	csv << "N / processors";
-	for(int p: processors)
-		csv << delim << p ;
-	csv << std::endl;
+	if(rank == 0){
+		csv.open("out_d_"+std::to_string(dim)+".csv");
+		csv << "N / processors";
+		for(int p: processors)
+			csv << delim << p ;
+		csv << std::endl;
+	}
 
 	for(int s: sizes){
-		csv << s;
+		if(rank == 0)
+			csv << s;
 		for(int p: processors){
 			MPI_Comm comm;
 			MPI_Comm_split(MPI_COMM_WORLD, (rank < p)? 0 : 1, rank, &comm);
 
-			double sec_t = do_(dim, s, p, 1, comm);
-			MPI_Comm_free(&comm);
+			if(rank < p){
+				double sec_t = do_(dim, s, p, rank, 1, comm);
+				double secmax;
+				MPI_Reduce(&sec_t, &secmax, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+				if(rank == 0)
+					csv << delim << secmax ;
+			}
 
-			csv << delim << sec_t ;
+			MPI_Comm_free(&comm);
+			MPI_Barrier(MPI_COMM_WORLD);
+
 		}
-		csv << std::endl;
+		if(rank == 0)
+			csv << std::endl;
 	}
 
 	MPI_Finalize();
