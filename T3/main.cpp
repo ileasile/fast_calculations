@@ -14,7 +14,7 @@ const double pi = 3.14159265358979323846;
 const double c_1_2pi = .5/pi;
 const double c_m1_2pi = - c_1_2pi;
 
-void f(int n, int k, int sz, double * arg, double * res, double * omega){
+void f(MPI_Comm comm, int n, int k, int sz, double * arg, double * res, double * omega){
 	double * x = arg;
 	double * y = arg + n;
 	double * rx = res;
@@ -50,18 +50,18 @@ void f(int n, int k, int sz, double * arg, double * res, double * omega){
 		ry[i] *= c_1_2pi;
 	}
 
-	MPI_Allreduce(MPI_IN_PLACE, res, 2*n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	MPI_Allreduce(MPI_IN_PLACE, res, 2*n, MPI_DOUBLE, MPI_SUM, comm);
 }
 
-void rk(int n, int k, int sz,
+void rk(MPI_Comm comm, int n, int k, int sz,
 		int n_iter, double h,
 		double * p, double * w, double ** res_p){
 	double h_2 = h * 0.5;
 	double h_6 = h / 6.;
 	int n2 = n * 2;
 	size_t vsz = n2 * sizeof(double);
-
 	*res_p = new double[n2 * n_iter];
+
 	double * r = *res_p;
 	double * k1 = new double[n2 * 4];
 	double * k2 = k1 + n2;
@@ -73,25 +73,25 @@ void rk(int n, int k, int sz,
 	memcpy(r, p, vsz);
 
 	for(int i = 1; i < n_iter; ++i){
-		// std::cout << i << "\n";
+
 		memset(k1, 0, vsz * 4);
 
 		double * r_cur = r + i * n2;
 		double * r_prev = r + (i - 1) * n2;
 
-		f(n, k, sz, r_prev, k1, w);
+		f(comm, n, k, sz, r_prev, k1, w);
 
 		for(int j = 0; j < n2; ++j)
 			temp[j] = r_prev[j] + h_2 * k1[j];
-		f(n, k, sz, temp, k2, w);
+		f(comm, n, k, sz, temp, k2, w);
 
 		for(int j = 0; j < n2; ++j)
 			temp[j] = r_prev[j] + h_2 * k2[j];
-		f(n, k, sz, temp, k3, w);
+		f(comm, n, k, sz, temp, k3, w);
 
 		for(int j = 0; j < n2; ++j)
 			temp[j] = r_prev[j] + h * k3[j];
-		f(n, k, sz, temp, k4, w);
+		f(comm, n, k, sz, temp, k4, w);
 
 		for(int j = 0; j < n2; ++j)
 			r_cur[j] = r_prev[j] + h_6 * (k1[j] + k4[j] + 2 * (k2[j] + k3[j]));
@@ -198,17 +198,17 @@ void gen5(int n, double * p, double * w){
 	}
 }
 
-void go(std::ostream & out, int rank, int size, int n, int n_iter, double h){
+double go(MPI_Comm comm, std::ostream & out, int rank, int size, int n, int n_iter, double h){
 	Timer tt;
-	double *p, *w, *r;
+	double *p, *w, *r = nullptr;
 	p = new double[2 * n];
 	w = new double[n];
 	if(rank == 0)
-		gen5(n, p, w);
-	MPI_Bcast(p, 2 * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Bcast(w, n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		gen(n, p, w);
+	MPI_Bcast(p, 2 * n, MPI_DOUBLE, 0, comm);
+	MPI_Bcast(w, n, MPI_DOUBLE, 0, comm);
 
-	rk(n, rank, size, n_iter, h, p, w, &r);
+	rk(comm, n, rank, size, n_iter, h, p, w, &r);
 	auto tm = tt.stop_reset();
 
 	if(rank == 0) {
@@ -227,6 +227,12 @@ void go(std::ostream & out, int rank, int size, int n, int n_iter, double h){
 			out << "\n";
 		}
 	}
+
+	delete[] p;
+	delete[] w;
+	delete[] r;
+
+	return (double) tm * 1e-6;
 }
 
 int main(int argc, char ** argv) {
@@ -237,21 +243,68 @@ int main(int argc, char ** argv) {
 
 #ifdef ILEASILE
 	std::ofstream out;
-	if(rank == 0)
-		//out.open("out_"+std::to_string(rank)+".txt");
-		out.open("out.txt");
+
 #else
 	std::ostream & out = std::cout;
 #endif
 
-	go(out, rank, size,
-	   std::stoi(argv[1]),
-	   std::stoi(argv[2]),
-	   std::stod(argv[3]));
+	std::vector<int> sizes{1, 2, 3, 4, 6, 8, 10, 12, 14, 16};
+	std::vector<int> ns{10, 20, 50, 100, 200, 500, 1000, 2000};
+
+	std::ofstream csv;
+	std::string delim = ",";
+
+	if(rank == 0){
+		csv.open("out.csv");
+		csv << "N / processors";
+		for(int s: sizes){
+			if(s > size)
+				continue;
+			csv << delim << s ;
+		}
+
+		csv << std::endl;
+	}
+
+	for(auto & n: ns){
+		if(rank == 0)
+			csv << n;
+		for(auto & s: sizes){
+			if(s > size)
+				continue;
+
+			MPI_Comm comm;
+			MPI_Comm_split(MPI_COMM_WORLD, (rank < s)? 0 : 1, rank, &comm);
+
+			if(rank < s) {
+				if(rank == 0)
+					out.open("out_"+std::to_string(n)+"_" + std::to_string(s)+".txt");
+					//out.open("out.txt");
+				auto tm = go(comm, out, rank, s,
+							 n,
+							 std::stoi(argv[2]),
+							 std::stod(argv[3]));
+				if(rank == 0)
+					out.close();
+
+				double secmax;
+				MPI_Reduce(&tm, &secmax, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+				if(rank == 0)
+					csv << delim << secmax ;
+			}
+
+			MPI_Barrier(MPI_COMM_WORLD);
+			MPI_Comm_free(&comm);
+
+		}
+		if(rank == 0)
+			csv << std::endl;
+	}
+
+
 
 #ifdef ILEASILE
-	if(rank == 0)
-		out.close();
+
 #endif
 
 	MPI_Finalize();
