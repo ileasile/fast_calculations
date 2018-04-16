@@ -2,4 +2,5 @@
 **/.idea/**
 T*/.goutput*
 T*/**/__pycache__/**
-
+**/out*.txt
+T*/*$*
