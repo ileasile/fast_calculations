@@ -249,7 +249,7 @@ int main(int argc, char ** argv) {
 #endif
 
 	std::vector<int> sizes{1, 2, 3, 4, 6, 8, 10, 12, 14, 16};
-	std::vector<int> ns{10, 20, 50, 100, 200, 500, 1000, 2000};
+	std::vector<int> ns{500, 1000, 2000};
 
 	std::ofstream csv;
 	std::string delim = ",";

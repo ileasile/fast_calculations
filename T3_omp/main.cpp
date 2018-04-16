@@ -1,57 +1,69 @@
 #include <iostream>
 #include <fstream>
-#include <mpi.h>
 #include <utility>
 #include <algorithm>
 #include <cstring>
 #include <random>
 #include <chrono>
 #include <cmath>
+#include <omp.h>
 #include "Timer.h"
 
-const double pi = 3.1415926;
-const double c_1_2pi = 1./2./pi;
+const double pi = 3.14159265358979323846;
+const double c_1_2pi = .5/pi;
 const double c_m1_2pi = - c_1_2pi;
 
-void f(int n, int k, int sz, double * arg, double * res, double * omega){
+void f(int n, int sz, double * arg, double * res, double * omega){
 	double * x = arg;
 	double * y = arg + n;
 	double * rx = res;
 	double * ry = res + n;
 
-	int cluster_size = n / sz + ((n % sz) != 0);
-	int cluster_beg = std::min(n - 1, k * cluster_size);
-	int cluster_end = std::min(n, (k + 1) * cluster_size);
+	#pragma omp parallel num_threads(sz)
+	{
+		auto k = omp_get_thread_num();
+		auto _sz = omp_get_num_threads();
 
-	for(int i = 0; i < n; ++i){
+		int cluster_size = n / _sz + ((n % _sz) != 0);
+		int cluster_beg = std::min(n - 1, k * cluster_size);
+		int cluster_end = std::min(n, (k + 1) * cluster_size);
+
 		for(int j = cluster_beg; j < cluster_end; ++j){
-			if(i == j)
-				continue;
+			for(int i = 0; i < j; ++i){
+				double dx = x[i] - x[j];
+				double dy = y[i] - y[j];
+				double m = omega[j]/(dx*dx + dy*dy);
 
-			double dx = x[i] - x[j];
-			double dy = y[i] - y[j];
-			double m = omega[j]/(dx*dx + dy*dy);
+				rx[i] += dy * m;
+				ry[i] += dx * m;
+			}
+			for(int i = j+1; i < n; ++i){
+				double dx = x[i] - x[j];
+				double dy = y[i] - y[j];
+				double m = omega[j]/(dx*dx + dy*dy);
 
-			rx[i] += dy * m;
-			ry[i] += dx * m;
+				rx[i] += dy * m;
+				ry[i] += dx * m;
+			}
 		}
+	};
 
+	#pragma omp parallel for num_threads(sz)
+	for(int i = 0; i < n; ++i){
 		rx[i] *= c_m1_2pi;
 		ry[i] *= c_1_2pi;
 	}
-
-	MPI_Allreduce(MPI_IN_PLACE, res, 2*n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 }
 
-void rk(int n, int k, int sz,
+void rk(int n, int sz,
 		int n_iter, double h,
 		double * p, double * w, double ** res_p){
 	double h_2 = h * 0.5;
 	double h_6 = h / 6.;
 	int n2 = n * 2;
 	size_t vsz = n2 * sizeof(double);
-
 	*res_p = new double[n2 * n_iter];
+
 	double * r = *res_p;
 	double * k1 = new double[n2 * 4];
 	double * k2 = k1 + n2;
@@ -63,24 +75,25 @@ void rk(int n, int k, int sz,
 	memcpy(r, p, vsz);
 
 	for(int i = 1; i < n_iter; ++i){
+
 		memset(k1, 0, vsz * 4);
 
 		double * r_cur = r + i * n2;
 		double * r_prev = r + (i - 1) * n2;
 
-		f(n, k, sz, r_prev, k1, w);
+		f(n, sz, r_prev, k1, w);
 
 		for(int j = 0; j < n2; ++j)
 			temp[j] = r_prev[j] + h_2 * k1[j];
-		f(n, k, sz, temp, k2, w);
+		f(n, sz, temp, k2, w);
 
 		for(int j = 0; j < n2; ++j)
 			temp[j] = r_prev[j] + h_2 * k2[j];
-		f(n, k, sz, temp, k3, w);
+		f(n, sz, temp, k3, w);
 
 		for(int j = 0; j < n2; ++j)
 			temp[j] = r_prev[j] + h * k3[j];
-		f(n, k, sz, temp, k4, w);
+		f(n, sz, temp, k4, w);
 
 		for(int j = 0; j < n2; ++j)
 			r_cur[j] = r_prev[j] + h_6 * (k1[j] + k4[j] + 2 * (k2[j] + k3[j]));
@@ -158,7 +171,7 @@ void gen3(int n, double * p, double * w){
 }
 
 void gen4(int n, double * p, double * w){
-	// Generate on a circle
+	// Generate on a cardioida
 	double r = 2;
 
 	for(int i = 0; i < n; ++i){
@@ -172,62 +185,97 @@ void gen4(int n, double * p, double * w){
 	}
 }
 
-void go(std::ostream & out, int rank, int size, int n, int n_iter, double h){
-	Timer tt;
-	double *p, *w, *r;
-	p = new double[2 * n];
-	w = new double[n];
-	if(rank == 0)
-		gen4(n, p, w);
-	MPI_Bcast(p, 2 * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Bcast(w, n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-	rk(n, rank, size, n_iter, h, p, w, &r);
-	auto tm = tt.stop_reset();
-
-	if(rank == 0) {
-		out << (double) tm * 1e-6 << std::endl;
-		out << n << " " << n_iter << " " << h << "\n";
-		for (int i = 0; i < n; ++i) {
-			out << w[i] << " ";
-		}
-		out << "\n";
-		for (int i = 0; i < n_iter; ++i) {
-			for (int j = 0; j < n; ++j)
-				out << r[i * 2 * n + j] << " ";
-			out << "\n";
-			for (int j = n; j < 2 * n; ++j)
-				out << r[i * 2 * n + j] << " ";
-			out << "\n";
+void gen5(int n, double * p, double * w){
+	// Generate on a circle
+	int k = 10;
+	for(int r = 0; r < k; ++r) {
+		for (int i = 0; i < n / k; ++i) {
+			double phi = i * 2 * pi / n * k;
+			double x = (r + 1) * cos(phi);
+			double y = (r + 1) * sin(phi);
+			p[r * k + i] = x;
+			p[r * k + i + n] = y;
+			w[r * k + i] = 5;
 		}
 	}
 }
 
+double go(std::ostream & out, int size, int n, int n_iter, double h){
+	Timer tt;
+	double *p, *w, *r = nullptr;
+	p = new double[2 * n];
+	w = new double[n];
+	gen(n, p, w);
+
+	rk(n, size, n_iter, h, p, w, &r);
+	auto tm = tt.stop_reset();
+
+	out << (double) tm * 1e-6 << std::endl;
+	out << n << " " << n_iter << " " << h << "\n";
+	for (int i = 0; i < n; ++i) {
+		out << w[i] << " ";
+	}
+	out << "\n";
+	for (int i = 0; i < n_iter; ++i) {
+		for (int j = 0; j < n; ++j)
+			out << r[i * 2 * n + j] << " ";
+		out << "\n";
+		for (int j = n; j < 2 * n; ++j)
+			out << r[i * 2 * n + j] << " ";
+		out << "\n";
+	}
+
+	delete[] p;
+	delete[] w;
+	delete[] r;
+
+	return (double) tm * 1e-6;
+}
+
 int main(int argc, char ** argv) {
-	MPI_Init(NULL, NULL);
-	int size, rank;
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 #ifdef ILEASILE
 	std::ofstream out;
-	if(rank == 0)
-		//out.open("out_"+std::to_string(rank)+".txt");
-		out.open("out.txt");
+
 #else
 	std::ostream & out = std::cout;
 #endif
 
-	go(out, rank, size,
-	   std::stoi(argv[1]),
-	   std::stoi(argv[2]),
-	   std::stod(argv[3]));
+	std::vector<int> sizes{1, 2, 3, 4, 6, 8, 10, 12, 14, 16};
+	std::vector<int> ns{10, 20, 50, 100, 200, 500, 1000, 2000};
+
+	std::ofstream csv;
+	std::string delim = ",";
+
+	csv.open("out.csv");
+	csv << "N / processors";
+	for(int s: sizes){
+		csv << delim << s ;
+	}
+
+	csv << std::endl;
+
+	for(auto & n: ns){
+		csv << n;
+		for(auto & s: sizes){
+
+			out.open("out_"+std::to_string(n)+"_" + std::to_string(s)+".txt");
+			//out.open("out.txt");
+			auto tm = go(out, s,
+						 n,
+						 std::stoi(argv[2]),
+						 std::stod(argv[3]));
+			out.close();
+			csv << delim << tm ;
+
+		}
+		csv << std::endl;
+	}
+
+
 
 #ifdef ILEASILE
-	if(rank == 0)
-		out.close();
-#endif
 
-	MPI_Finalize();
+#endif
 	return 0;
 }
